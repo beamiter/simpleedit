@@ -1,0 +1,3 @@
+The generated Julia Unicode symbol table in autoload/simpleedit/julia_symbols.vim
+is derived from Julia's REPL completion data through JuliaEditorSupport/julia-vim.
+Julia and julia-vim are distributed under the MIT license.

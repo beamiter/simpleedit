@@ -1,0 +1,14 @@
+*simpleedit.txt*  Shared editing primitives for Vim9
+
+SimpleEdit highlights yanked text and exposes Julia-compatible Unicode input.
+
+:SimpleEditHealth       Show feature health.
+:SimpleEditClearYank    Remove the active yank highlight.
+
+                                             *simpleedit#UnicodeTab()*
+simpleedit#UnicodeTab() returns an expression-mapping expansion for a complete
+LaTeX or emoji token before the cursor, or an empty string when it did not
+handle the key.  Completion plugins can therefore give it a well-defined
+fallback position.
+
+vim:tw=78:ts=8:noet:ft=help:norl:

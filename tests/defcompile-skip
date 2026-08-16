@@ -1,0 +1,7 @@
+# Basename globs excluded from tests/defcompile.vim, one per line.
+#
+# julia_symbols.vim is generated data: one function returning the Julia REPL
+# completion table.  Its function is named for its own autoload path, and the
+# compile check sources each script under a temporary name, which Vim rejects
+# with E746 for such a name.  Nothing here is logic, so nothing is lost.
+julia_symbols.vim

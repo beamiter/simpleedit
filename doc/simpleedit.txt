@@ -11,4 +11,15 @@ LaTeX or emoji token before the cursor, or an empty string when it did not
 handle the key.  Completion plugins can therefore give it a well-defined
 fallback position.
 
+                                             *simpleedit#UnicodeComplete()*
+simpleedit#UnicodeComplete({findstart}, {base}) is the same table behind a
+'completefunc' / 'omnifunc' interface, for people who want a completion menu
+instead of a <Tab> expansion: >
+        setlocal completefunc=simpleedit#UnicodeComplete
+<
+It follows the |complete-functions| protocol.  On the second call it returns at
+most 100 entries, each of them the token, a space, and the symbol it expands
+to, in byte order.  SimpleEdit sets no mapping and no option for it; nothing in
+the Simple suite calls it either, so it is yours to wire up.
+
 vim:tw=78:ts=8:noet:ft=help:norl:

@@ -22,4 +22,14 @@ most 100 entries, each of them the token, a space, and the symbol it expands
 to, in byte order.  SimpleEdit sets no mapping and no option for it; nothing in
 the Simple suite calls it either, so it is yours to wire up.
 
+OPTIONS                                                  *simpleedit-options*
+
+g:simpleedit_yank_highlight    Enable yank highlighting (default 1).
+g:simpleedit_yank_duration     Highlight duration in milliseconds (default
+                               220; must be a positive number).
+g:simpleedit_unicode_filetypes Filetypes where UnicodeTab() expands tokens
+                               (default ['julia']; must be a List).
+
+Invalid option types fall back to the defaults.
+
 vim:tw=78:ts=8:noet:ft=help:norl:

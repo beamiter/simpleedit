@@ -9,12 +9,43 @@ export def Setup()
   endif
 enddef
 
+def RemoveYank(buf: number)
+  # A timer may outlive an unloaded (but still existing) buffer.  Text
+  # properties cannot be inspected in that state, and unloading has already
+  # discarded the visible highlight anyway.
+  if !bufloaded(buf)
+    return
+  endif
+  var info = getbufinfo(buf)
+  if empty(info)
+    return
+  endif
+  prop_remove({type: 'SimpleEditYank', bufnr: buf, all: true}, 1, info[0].linecount)
+enddef
+
 export def ClearYank(buf: number)
   if !bufexists(buf)
     return
   endif
-  prop_remove({type: 'SimpleEditYank', bufnr: buf, all: true}, 1, getbufinfo(buf)[0].linecount)
+  # Stop the owner before clearing its id.  HighlightYank() calls this before
+  # every new yank; clearing the id first used to orphan the previous timer,
+  # which then fired during the new highlight and removed it early.
+  var timer = getbufvar(buf, 'simpleedit_yank_timer', -1)
   setbufvar(buf, 'simpleedit_yank_timer', -1)
+  if type(timer) == v:t_number && timer >= 0
+    timer_stop(timer)
+  endif
+  RemoveYank(buf)
+enddef
+
+def OnYankTimeout(buf: number, timer: number)
+  # A stopped timer should not run, but the id check also makes a late callback
+  # harmless if Vim had already queued it when a newer yank replaced it.
+  if !bufexists(buf) || getbufvar(buf, 'simpleedit_yank_timer', -1) != timer
+    return
+  endif
+  setbufvar(buf, 'simpleedit_yank_timer', -1)
+  RemoveYank(buf)
 enddef
 
 # One prop_add() per line, deliberately, rather than the batched
@@ -35,8 +66,59 @@ def AddYankLine(buf: number, lnum: number, col: number, length: number)
   })
 enddef
 
+# Highlight the bytes whose displayed cells intersect one row of a blockwise
+# yank.  A block is measured in virtual columns, not byte columns: the two end
+# marks can sit on different lines with different tabs or multibyte characters,
+# so subtracting their byte columns made the width of one endpoint leak onto
+# every row.  A text property cannot colour half a tab or wide character; it
+# colours that whole character, which is the closest faithful representation.
+def AddYankBlockLine(buf: number, lnum: number, left: number, right: number)
+  var text = getbufline(buf, lnum)[0]
+  if empty(text) || left >= virtcol([lnum, '$'])
+    return
+  endif
+  var start_col = virtcol2col(0, lnum, left)
+  var end_col = virtcol2col(0, lnum, right)
+  if start_col <= 0 || end_col < start_col
+    return
+  endif
+  # Include combining marks / variation selectors attached to the final base
+  # character.  They occupy the same cell and were part of the block yank, but
+  # byte-counting only the base left most of the grapheme unhighlighted.
+  var end_char = strcharpart(strpart(text, end_col - 1), 0, 1, true)
+  AddYankLine(buf, lnum, start_col,
+    end_col - start_col + max([1, strlen(end_char)]))
+enddef
+
+def YankEnabled(): bool
+  var configured: any = get(g:, 'simpleedit_yank_highlight', 1)
+  if type(configured) == v:t_bool
+    return configured
+  endif
+  return type(configured) == v:t_number ? configured != 0 : true
+enddef
+
+def YankDuration(): number
+  var configured: any = get(g:, 'simpleedit_yank_duration', 220)
+  return type(configured) == v:t_number && configured > 0 ? configured : 220
+enddef
+
+def UnicodeFiletypes(): list<string>
+  var configured: any = get(g:, 'simpleedit_unicode_filetypes', ['julia'])
+  if type(configured) != v:t_list
+    return ['julia']
+  endif
+  var filetypes: list<string> = []
+  for value in configured
+    if type(value) == v:t_string
+      add(filetypes, value)
+    endif
+  endfor
+  return filetypes
+enddef
+
 export def HighlightYank()
-  if !get(g:, 'simpleedit_yank_highlight', 1)
+  if !YankEnabled()
     return
   endif
   Setup()
@@ -65,8 +147,20 @@ export def HighlightYank()
   var regtype = get(v:event, 'regtype', '')
   for lnum in range(first[1], last_lnum)
     var text = getbufline(buf, lnum)[0]
-    if regtype =~# '^V'
+    if regtype =~# '\m^V'
       AddYankLine(buf, lnum, 1, max([1, strlen(text)]))
+    elseif strpart(regtype, 0, 1) ==# "\<C-V>"
+      # A blockwise yank is a rectangle.  Treating it as a multi-line
+      # characterwise yank highlighted from the opening corner to end-of-line
+      # on every line except the last often coloured most of the screen rather
+      # than what was copied.  Convert its screen-cell width on each row; byte
+      # columns from the two endpoint lines are not interchangeable.
+      var width = str2nr(strpart(regtype, 1))
+      var left = min([virtcol("'["), virtcol("']")])
+      if width <= 0
+        width = abs(virtcol("']") - virtcol("'[")) + 1
+      endif
+      AddYankBlockLine(buf, lnum, left, left + width - 1)
     elseif first[1] == last[1]
       AddYankLine(buf, lnum, first[2], max([1, last[2] - first[2] + 1]))
     elseif lnum == first[1]
@@ -77,12 +171,7 @@ export def HighlightYank()
       AddYankLine(buf, lnum, 1, max([1, strlen(text)]))
     endif
   endfor
-  var old_timer = getbufvar(buf, 'simpleedit_yank_timer', -1)
-  if type(old_timer) == v:t_number && old_timer >= 0
-    timer_stop(old_timer)
-  endif
-  var duration = get(g:, 'simpleedit_yank_duration', 220)
-  var timer = timer_start(max([1, duration]), (_) => ClearYank(buf))
+  var timer = timer_start(YankDuration(), (expired) => OnYankTimeout(buf, expired))
   setbufvar(buf, 'simpleedit_yank_timer', timer)
 enddef
 
@@ -97,12 +186,12 @@ def UnicodeTable(): dict<string>
 enddef
 
 export def UnicodeTab(): string
-  if index(get(g:, 'simpleedit_unicode_filetypes', ['julia']), &l:filetype) < 0
+  if index(UnicodeFiletypes(), &l:filetype) < 0
     return ''
   endif
   var byte_col = col('.') - 1
   var before = strpart(getline('.'), 0, byte_col)
-  var token = matchstr(before, '\\\%(:[^[:space:]\\]*:\|[^[:space:]\\]*\)$')
+  var token = matchstr(before, '\m\\\%(:[^[:space:]\\]*:\|[^[:space:]\\]*\)$')
   if empty(token)
     return ''
   endif
@@ -142,7 +231,7 @@ enddef
 export def UnicodeComplete(findstart: number, base: string): any
   if findstart
     var before = strpart(getline('.'), 0, col('.') - 1)
-    return max([0, match(before, '\\[^[:space:]\\]*$')])
+    return max([0, match(before, '\m\\[^[:space:]\\]*$')])
   endif
   var table = UnicodeTable()
   var sorted_keys = UnicodeKeys()
@@ -171,7 +260,7 @@ enddef
 export def Health()
   Setup()
   echomsg 'SimpleEdit health'
-  echomsg $'  yank highlight: {get(g:, "simpleedit_yank_highlight", 1) ? "enabled" : "disabled"}'
+  echomsg $'  yank highlight: {YankEnabled() ? "enabled" : "disabled"}'
   echomsg $'  text properties: {has("textprop") ? "yes" : "no"}'
   echomsg $'  Unicode symbols: {len(UnicodeTable())}'
 enddef

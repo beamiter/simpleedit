@@ -48,6 +48,26 @@ assert_true(getbufvar(bufnr(), 'simpleedit_yank_timer', -1) >= 0,
   'the clearing timer was never armed')
 simpleedit#ClearYank(bufnr())
 
+# Replacing a highlight must retire its timer.  ClearYank() used to set the
+# buffer timer id to -1 before HighlightYank() read it, orphaning every old
+# timer; when the old one expired it cleared whichever newer highlight was on
+# screen at the time.
+g:simpleedit_yank_duration = 10
+setpos("'[", [0, 1, 1, 0])
+setpos("']", [0, 1, 5, 0])
+simpleedit#HighlightYank()
+var retired_timer = getbufvar(bufnr(), 'simpleedit_yank_timer', -1)
+g:simpleedit_yank_duration = 600000
+simpleedit#HighlightYank()
+var active_timer = getbufvar(bufnr(), 'simpleedit_yank_timer', -1)
+assert_notequal(retired_timer, active_timer)
+assert_equal([], timer_info(retired_timer), 'the replaced yank timer is still running')
+sleep 30m
+assert_equal(1, len(YankProps(1)), 'an old timer cleared the newer yank highlight')
+assert_equal(active_timer, getbufvar(bufnr(), 'simpleedit_yank_timer', -1))
+simpleedit#ClearYank(bufnr())
+assert_equal([], timer_info(active_timer), ':SimpleEditClearYank left its timer running')
+
 # Both marks past the end, at both of the boundaries range() draws.  range()
 # tolerates a start exactly one past its end -- range(2, 1) is [] -- but raises
 # E727 once the start is further out, so clamping last_lnum on its own is not

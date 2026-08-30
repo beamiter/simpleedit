@@ -101,6 +101,28 @@ assert_equal(4, YankProps(2)[0].length, 'the last line kept the wrong column ran
 simpleedit#ClearYank(bufnr())
 bwipe!
 
+# Text properties are stored in the undo tree, but b:simpleedit_yank_timer is
+# not.  Once a highlight has expired, undoing an edit made while it was alive
+# must not resurrect a property with no timer left to retire it.
+new
+setline(1, 'alpha')
+&l:undolevels = &l:undolevels
+setpos("'[", [0, 1, 1, 0])
+setpos("']", [0, 1, 5, 0])
+simpleedit#HighlightYank()
+assert_equal(1, len(YankProps(1)), 'the undo fixture was not highlighted')
+normal! A!
+simpleedit#ClearYank(bufnr())
+assert_equal([], YankProps(1), 'the expired highlight was not cleared')
+silent undo
+assert_equal('alpha', getline(1))
+# TextChanged is delivered on the next main-loop pass in an interactive Vim;
+# a sourced headless test has no such pass, so deliver that pending event here.
+doautocmd <nomodeline> TextChanged
+assert_equal([], YankProps(1),
+  'undo restored an expired yank highlight with no timer to clear it')
+bwipe!
+
 # --- 2. UnicodeComplete() over the prefix index ----------------------------
 # Called before anything else touches the table, so this also covers the cold
 # path where both the table and its key index are still empty.

@@ -25,5 +25,6 @@ simpleedit#Setup()
 augroup SimpleEdit
   autocmd!
   autocmd TextYankPost * simpleedit#HighlightYank()
+  autocmd TextChanged,TextChangedI * simpleedit#PruneExpiredYank(bufnr())
   autocmd ColorScheme * highlight default SimpleEditYank cterm=reverse gui=reverse
 augroup END

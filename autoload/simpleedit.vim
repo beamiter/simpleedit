@@ -31,11 +31,50 @@ export def ClearYank(buf: number)
   # every new yank; clearing the id first used to orphan the previous timer,
   # which then fired during the new highlight and removed it early.
   var timer = getbufvar(buf, 'simpleedit_yank_timer', -1)
+  if type(timer) == v:t_number && timer >= 0
+    # Text properties are undoable, buffer variables are not.  Fence the undo
+    # sequence whose highlight is being retired so the TextChanged hook below
+    # can distinguish a real undo from ordinary typing without sweeping the
+    # whole buffer on every change.
+    var retired_seq = buf == bufnr()
+      ? get(undotree(), 'seq_cur', 0)
+      : getbufvar(buf, 'simpleedit_yank_owner_seq', -1)
+    if type(retired_seq) == v:t_number && retired_seq >= 0
+      setbufvar(buf, 'simpleedit_yank_retired_seq', retired_seq)
+    endif
+  endif
   setbufvar(buf, 'simpleedit_yank_timer', -1)
+  setbufvar(buf, 'simpleedit_yank_owner_seq', -1)
   if type(timer) == v:t_number && timer >= 0
     timer_stop(timer)
   endif
   RemoveYank(buf)
+enddef
+
+# Text properties participate in Vim's undo history, while the timer id in a
+# buffer variable does not.  A highlight that has already expired can
+# therefore come back when the text edit made while it was visible is undone.
+# TextChanged runs for that undo; if no timer still owns the highlight, remove
+# any property the undo state restored.  Live highlights keep their original
+# duration and are allowed to follow ordinary edits until the timer fires.
+export def PruneExpiredYank(buf: number)
+  if !bufexists(buf) || buf != bufnr()
+    return
+  endif
+  var timer = getbufvar(buf, 'simpleedit_yank_timer', -1)
+  if type(timer) == v:t_number && timer >= 0
+    # Remember edits made while the live property is present.  The timer may
+    # later fire while another buffer is current, where undotree() cannot
+    # inspect this buffer directly.
+    setbufvar(buf, 'simpleedit_yank_owner_seq',
+      get(undotree(), 'seq_cur', 0))
+    return
+  endif
+  var retired_seq = getbufvar(buf, 'simpleedit_yank_retired_seq', -1)
+  if type(retired_seq) == v:t_number && retired_seq >= 0
+      && get(undotree(), 'seq_cur', retired_seq) < retired_seq
+    RemoveYank(buf)
+  endif
 enddef
 
 def OnYankTimeout(buf: number, timer: number)
@@ -44,7 +83,14 @@ def OnYankTimeout(buf: number, timer: number)
   if !bufexists(buf) || getbufvar(buf, 'simpleedit_yank_timer', -1) != timer
     return
   endif
+  var retired_seq = buf == bufnr()
+    ? get(undotree(), 'seq_cur', 0)
+    : getbufvar(buf, 'simpleedit_yank_owner_seq', -1)
+  if type(retired_seq) == v:t_number && retired_seq >= 0
+    setbufvar(buf, 'simpleedit_yank_retired_seq', retired_seq)
+  endif
   setbufvar(buf, 'simpleedit_yank_timer', -1)
+  setbufvar(buf, 'simpleedit_yank_owner_seq', -1)
   RemoveYank(buf)
 enddef
 
@@ -173,6 +219,13 @@ export def HighlightYank()
   endfor
   var timer = timer_start(YankDuration(), (expired) => OnYankTimeout(buf, expired))
   setbufvar(buf, 'simpleedit_yank_timer', timer)
+  if timer < 0
+    setbufvar(buf, 'simpleedit_yank_owner_seq', -1)
+    RemoveYank(buf)
+    return
+  endif
+  setbufvar(buf, 'simpleedit_yank_owner_seq',
+    get(undotree(), 'seq_cur', 0))
 enddef
 
 def UnicodeTable(): dict<string>

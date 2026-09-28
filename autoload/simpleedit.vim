@@ -167,6 +167,17 @@ export def HighlightYank()
   if !YankEnabled()
     return
   endif
+  # 'clipboard' autoselect copies the Visual area into "* every time the
+  # selection changes and fires TextYankPost for it, but that copy never moves
+  # '[ and '].  Highlighting their stale range flashed whatever the previous
+  # operator had touched -- the whole buffer right after a file is read, where
+  # they span the first line to the last -- on every mouse double/triple click
+  # and every v/V selection.  An operator has left Visual mode by the time its
+  # TextYankPost fires, so an event that arrives inside it is never one whose
+  # marks describe the text.
+  if mode() =~# "^[vVsS\<C-v>\<C-s>]"
+    return
+  endif
   Setup()
   var buf = bufnr()
   ClearYank(buf)

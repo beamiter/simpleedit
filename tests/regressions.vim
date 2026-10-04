@@ -13,7 +13,7 @@ vim9script
 #      binary-searches a sorted key list; these assertions compare it against
 #      the naive scan it replaced, on the boundaries a binary search gets wrong.
 
-set nocompatible nomore
+set nocompatible nomore virtualedit=onemore
 const ROOT = fnamemodify(resolve(expand('<sfile>:p')), ':h:h')
 execute 'set runtimepath^=' .. fnameescape(ROOT)
 
@@ -180,6 +180,71 @@ assert_equal(NaiveScan('\')[0 : 99], capped, 'the cap no longer takes the first 
 
 # An empty base is every key, still capped, still sorted.
 assert_equal(100, len(simpleedit#UnicodeComplete(0, '')), 'an empty base broke the cap')
+bwipe!
+
+# --- 3. Filetype case, wipeout timers, empty and over-wide yanks ------------
+new
+g:simpleedit_unicode_filetypes = ['Julia']
+setlocal filetype=julia
+setline(1, 'x = \alpha')
+cursor(1, strlen(getline(1)) + 1)
+assert_equal(repeat("\<BS>", 6) .. 'α', simpleedit#UnicodeTab(),
+  'a mixed-case unicode filetype list ignored julia')
+g:simpleedit_unicode_filetypes = ['julia']
+bwipe!
+
+new
+g:simpleedit_yank_duration = 600000
+setline(1, ['alpha'])
+setpos("'[", [0, 1, 1, 0])
+setpos("']", [0, 1, 5, 0])
+simpleedit#HighlightYank()
+var wipe_timer = getbufvar(bufnr(), 'simpleedit_yank_timer', -1)
+assert_true(wipe_timer >= 0, 'the fixture never armed a yank timer')
+var wipe_buf = bufnr()
+bwipe!
+assert_equal([], timer_info(wipe_timer),
+  'wiping the buffer left the yank timer running')
+
+new
+setline(1, [''])
+setpos("'[", [0, 1, 1, 0])
+setpos("']", [0, 1, 1, 0])
+try
+  simpleedit#HighlightYank()
+catch
+  assert_report('highlighting an empty line threw: ' .. v:exception)
+endtry
+assert_equal([], prop_list(1, {types: ['SimpleEditYank']}),
+  'an empty line grew a one-column highlight')
+simpleedit#ClearYank(bufnr())
+
+# '] past the last byte must not ask prop_add() for a length the line does not
+# have; the highlight stops at the last existing character.
+setline(1, ['abc'])
+setpos("'[", [0, 1, 1, 0])
+setpos("']", [0, 1, 99, 0])
+simpleedit#HighlightYank()
+var over = prop_list(1, {types: ['SimpleEditYank']})
+assert_equal(1, len(over))
+assert_equal(3, over[0].length, 'a mark past EOL highlighted past the line')
+simpleedit#ClearYank(bufnr())
+
+g:simpleedit_yank_duration = 0
+setpos("'[", [0, 1, 1, 0])
+setpos("']", [0, 1, 3, 0])
+simpleedit#HighlightYank()
+assert_true(getbufvar(bufnr(), 'simpleedit_yank_timer', -1) >= 0,
+  'a duration of 0 disabled highlighting instead of falling back to 220 ms')
+simpleedit#ClearYank(bufnr())
+g:simpleedit_yank_duration = 600000
+
+# A wiped buffer must not throw from the TextChanged pruner.
+try
+  simpleedit#PruneExpiredYank(wipe_buf)
+catch
+  assert_report('PruneExpiredYank on a wiped buffer threw: ' .. v:exception)
+endtry
 bwipe!
 
 if !empty(v:errors)

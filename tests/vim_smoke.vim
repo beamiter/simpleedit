@@ -1,6 +1,7 @@
 vim9script
 
 set nocompatible nomore virtualedit=onemore
+set cmdheight=20
 const ROOT = fnamemodify(resolve(expand('<sfile>:p')), ':h:h')
 execute 'set runtimepath^=' .. fnameescape(ROOT)
 execute 'source ' .. fnameescape(ROOT .. '/plugin/simpleedit.vim')
@@ -74,6 +75,13 @@ set nomagic
 assert_equal(repeat("\<BS>", 6) .. 'α', simpleedit#UnicodeTab())
 assert_equal(4, simpleedit#UnicodeComplete(1, ''))
 set magic
+
+# A configured filetype must match ignoring case: ftplugins set 'julia', a
+# vimrc that listed 'Julia' used to disable expansion entirely.
+g:simpleedit_unicode_filetypes = ['Julia']
+assert_equal(repeat("\<BS>", 6) .. 'α', simpleedit#UnicodeTab(),
+  'a mixed-case unicode filetype list ignored julia')
+g:simpleedit_unicode_filetypes = ['julia']
 setline(1, 'x = plain')
 cursor(1, strlen(getline(1)) + 1)
 assert_equal('', simpleedit#UnicodeTab())
@@ -95,6 +103,27 @@ catch
   assert_report('mistyped yank options threw: ' .. v:exception)
 endtry
 assert_equal(1, len(prop_list(1, {types: ['SimpleEditYank']})))
+simpleedit#ClearYank(bufnr())
+
+g:simpleedit_yank_highlight = v:false
+simpleedit#HighlightYank()
+assert_equal([], prop_list(1, {types: ['SimpleEditYank']}),
+  'v:false did not disable yank highlighting')
+assert_match('yank highlight: disabled', execute('SimpleEditHealth'))
+g:simpleedit_yank_highlight = 1
+
+# A characterwise yank whose '] sits past the last byte must clamp, not throw.
+setline(1, ['xyz'])
+setpos("'[", [0, 1, 2, 0])
+setpos("']", [0, 1, 99, 0])
+try
+  simpleedit#HighlightYank()
+catch
+  assert_report('a mark past EOL threw: ' .. v:exception)
+endtry
+var clamped = prop_list(1, {types: ['SimpleEditYank']})
+assert_equal(1, len(clamped))
+assert_equal(2, clamped[0].length, 'the highlight did not stop at the last byte')
 simpleedit#ClearYank(bufnr())
 
 assert_equal(2, exists(':SimpleEditHealth'))

@@ -157,7 +157,7 @@ def UnicodeFiletypes(): list<string>
   var filetypes: list<string> = []
   for value in configured
     if type(value) == v:t_string
-      add(filetypes, value)
+      add(filetypes, tolower(value))
     endif
   endfor
   return filetypes
@@ -205,7 +205,8 @@ export def HighlightYank()
   for lnum in range(first[1], last_lnum)
     var text = getbufline(buf, lnum)[0]
     if regtype =~# '\m^V'
-      AddYankLine(buf, lnum, 1, max([1, strlen(text)]))
+      var linelen = strlen(text)
+      AddYankLine(buf, lnum, 1, linelen > 0 ? linelen : 0)
     elseif strpart(regtype, 0, 1) ==# "\<C-V>"
       # A blockwise yank is a rectangle.  Treating it as a multi-line
       # characterwise yank highlighted from the opening corner to end-of-line
@@ -219,11 +220,12 @@ export def HighlightYank()
       endif
       AddYankBlockLine(buf, lnum, left, left + width - 1)
     elseif first[1] == last[1]
-      AddYankLine(buf, lnum, first[2], max([1, last[2] - first[2] + 1]))
+      var last_col = min([last[2], strlen(text)])
+      AddYankLine(buf, lnum, first[2], max([0, last_col - first[2] + 1]))
     elseif lnum == first[1]
-      AddYankLine(buf, lnum, first[2], max([1, strlen(text) - first[2] + 1]))
+      AddYankLine(buf, lnum, first[2], max([0, strlen(text) - first[2] + 1]))
     elseif lnum == last[1]
-      AddYankLine(buf, lnum, 1, max([1, last[2]]))
+      AddYankLine(buf, lnum, 1, max([0, min([last[2], strlen(text)])]))
     else
       AddYankLine(buf, lnum, 1, max([1, strlen(text)]))
     endif
@@ -250,7 +252,7 @@ def UnicodeTable(): dict<string>
 enddef
 
 export def UnicodeTab(): string
-  if index(UnicodeFiletypes(), &l:filetype) < 0
+  if index(UnicodeFiletypes(), tolower(&l:filetype)) < 0
     return ''
   endif
   var byte_col = col('.') - 1

@@ -202,8 +202,10 @@ export def HighlightYank()
     return
   endif
   var regtype = get(v:event, 'regtype', '')
-  for lnum in range(first[1], last_lnum)
-    var text = getbufline(buf, lnum)[0]
+  var texts = getbufline(buf, first[1], last_lnum)
+  for index in range(len(texts))
+    var lnum = first[1] + index
+    var text = texts[index]
     if regtype =~# '\m^V'
       var linelen = strlen(text)
       AddYankLine(buf, lnum, 1, linelen > 0 ? linelen : 0)

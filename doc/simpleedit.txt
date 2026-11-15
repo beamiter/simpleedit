@@ -11,6 +11,12 @@ LaTeX or emoji token before the cursor, or an empty string when it did not
 handle the key.  Completion plugins can therefore give it a well-defined
 fallback position.
 
+Expansion requires 'backspace' to allow crossing the start of Insert mode
+("start" or "nostop", also numeric 2 or 3). Otherwise it returns an empty
+string without editing, including for newly typed tokens. This conservative
+fallback prevents a refused deletion from leaving a partial token plus the
+Unicode symbol. SimpleEdit never changes your 'backspace' setting.
+
                                              *simpleedit#UnicodeComplete()*
 simpleedit#UnicodeComplete({findstart}, {base}) is the same table behind a
 'completefunc' / 'omnifunc' interface, for people who want a completion menu

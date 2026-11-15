@@ -254,6 +254,17 @@ def UnicodeTable(): dict<string>
 enddef
 
 export def UnicodeTab(): string
+  # Expansion erases the token through <BS> before inserting its replacement.
+  # If Vim refuses those keys at the insert-start boundary, returning the
+  # symbol would append it to the unchanged (or partially erased) token.
+  # Expression mappings cannot reliably inspect that boundary. Decline the
+  # expansion unless the user's backspace policy permits crossing it.
+  var bs = &backspace
+  if bs !=# '2' && bs !=# '3'
+      && index(split(bs, ','), 'start') < 0
+      && index(split(bs, ','), 'nostop') < 0
+    return ''
+  endif
   if index(UnicodeFiletypes(), tolower(&l:filetype)) < 0
     return ''
   endif

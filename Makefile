@@ -1,6 +1,6 @@
-.PHONY: check defcompile test regressions visual
+.PHONY: check defcompile test regressions visual unicode
 
-check: defcompile test regressions visual
+check: defcompile test regressions visual unicode
 
 defcompile:
 	vim -N -u NONE -n -i NONE -es -S tests/defcompile.vim
@@ -16,3 +16,6 @@ regressions:
 # so that is redirected too: a pipe there would block a stalled run for good.
 visual:
 	vim -N -u NONE -n -i NONE --not-a-term -S tests/visual_yank.vim </dev/null >/dev/null 2>&1
+
+unicode:
+	vim -N -u NONE -n -i NONE -es -S tests/unicode_backspace.vim

@@ -1,5 +1,7 @@
 vim9script
 
+set backspace=indent,eol,start
+
 set nocompatible nomore virtualedit=onemore
 set cmdheight=20
 const ROOT = fnamemodify(resolve(expand('<sfile>:p')), ':h:h')

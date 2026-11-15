@@ -1,5 +1,7 @@
 vim9script
 
+set backspace=indent,eol,start
+
 # Two bugs are pinned here.
 #
 #   1. HighlightYank() indexed getbufline(buf, lnum)[0] for every line between

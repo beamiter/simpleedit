@@ -125,6 +125,33 @@ assert_equal([], YankProps(1),
   'undo restored an expired yank highlight with no timer to clear it')
 bwipe!
 
+# Characterwise yank marks identify the first byte of the final character,
+# not its last byte.  Include the whole character and its composing marks.
+new
+for ending in ['中', 'α', '😀', 'e' .. nr2char(0x301)]
+  setline(1, ending .. 'tail')
+  normal! gg0yl
+  assert_equal(ending, getreg('"'))
+  assert_equal(strlen(ending), YankProps(1)[0].length,
+    'single-line characterwise yank truncated ' .. ending)
+  simpleedit#ClearYank(bufnr())
+
+  setline(1, ['start', ending .. 'tail'])
+  normal! gg0vjl"ay
+  assert_equal(['start', ending .. 't'], getreg('a', 1, true))
+  assert_equal(strlen(ending .. 't'), YankProps(2)[0].length)
+  simpleedit#ClearYank(bufnr())
+
+  # End precisely on the Unicode character on the final line.
+  normal! gg0vj"ay
+  assert_equal(['start', ending], getreg('a', 1, true))
+  assert_equal(strlen(ending), YankProps(2)[0].length,
+    'multi-line characterwise yank truncated ' .. ending)
+  simpleedit#ClearYank(bufnr())
+  deletebufline(bufnr(), 2)
+endfor
+bwipe!
+
 # --- 2. UnicodeComplete() over the prefix index ----------------------------
 # Called before anything else touches the table, so this also covers the cold
 # path where both the table and its key index are still empty.

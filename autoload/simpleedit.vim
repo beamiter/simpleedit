@@ -136,6 +136,21 @@ def AddYankBlockLine(buf: number, lnum: number, left: number, right: number)
     end_col - start_col + max([1, strlen(end_char)]))
 enddef
 
+# Characterwise operator marks can point at the first byte of the final
+# character (for example `yl` on 中).  Properties use byte lengths, so extend
+# that endpoint through the character and any attached composing marks.
+# Keep stale endpoints past EOL clamped to the surviving text.
+def YankEndColumn(text: string, col: number): number
+  if col <= 0
+    return 0
+  endif
+  if col > strlen(text)
+    return strlen(text)
+  endif
+  var tail = strcharpart(strpart(text, col - 1), 0, 1, true)
+  return min([strlen(text), col - 1 + strlen(tail)])
+enddef
+
 def YankEnabled(): bool
   var configured: any = get(g:, 'simpleedit_yank_highlight', 1)
   if type(configured) == v:t_bool
@@ -222,12 +237,12 @@ export def HighlightYank()
       endif
       AddYankBlockLine(buf, lnum, left, left + width - 1)
     elseif first[1] == last[1]
-      var last_col = min([last[2], strlen(text)])
+      var last_col = YankEndColumn(text, last[2])
       AddYankLine(buf, lnum, first[2], max([0, last_col - first[2] + 1]))
     elseif lnum == first[1]
       AddYankLine(buf, lnum, first[2], max([0, strlen(text) - first[2] + 1]))
     elseif lnum == last[1]
-      AddYankLine(buf, lnum, 1, max([0, min([last[2], strlen(text)])]))
+      AddYankLine(buf, lnum, 1, YankEndColumn(text, last[2]))
     else
       AddYankLine(buf, lnum, 1, max([1, strlen(text)]))
     endif

@@ -269,6 +269,13 @@ def UnicodeTable(): dict<string>
 enddef
 
 export def UnicodeTab(): string
+  # Replace-mode <BS> restores overwritten source text, unlike Insert-mode
+  # deletion. Erasing the token this way then inserting a symbol would restore
+  # unrelated old characters and overwrite only the first one. Let the caller
+  # use its ordinary fallback instead, without changing the text ourselves.
+  if strpart(mode(1), 0, 1) ==# 'R'
+    return ''
+  endif
   # Expansion erases the token through <BS> before inserting its replacement.
   # If Vim refuses those keys at the insert-start boundary, returning the
   # symbol would append it to the unchanged (or partially erased) token.

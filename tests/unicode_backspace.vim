@@ -40,6 +40,17 @@ for policy in ['2', '3', 'indent,eol,start', 'indent,eol,nostop']
   endfor
 endfor
 
+# Replace-mode backspace restores overwritten source text instead of deleting
+# the token. Declining expansion must leave the typed token and its suffix
+# intact rather than restoring old text and overwriting only its first char.
+set backspace=indent,eol,start
+for start in ['R', 'gR']
+  setline(1, 'abcdefXYZ')
+  cursor(1, 1)
+  feedkeys(start .. "\\alpha\<F5>\<Esc>", 'xt')
+  assert_equal('\alphaXYZ', getline(1), start .. ' expansion damaged replaced text')
+endfor
+
 if !empty(v:errors)
   writefile(v:errors, ROOT .. '/tests/unicode_errors.log')
   cquit

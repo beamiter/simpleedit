@@ -3,6 +3,12 @@ vim9script
 var s_unicode: dict<string> = {}
 var s_unicode_keys: list<string> = []
 
+# Longest token in the bundled Julia table, measured in bytes (including the
+# leading backslash). The Unicode regression checks all generated keys so a
+# table refresh cannot silently leave a longer key unrecognized. A constant
+# keeps plain Tab from loading the table just to discover its key length.
+const UNICODE_TAB_MAX_BYTES = 43
+
 export def Setup()
   if empty(prop_type_get('SimpleEditYank'))
     prop_type_add('SimpleEditYank', {highlight: 'SimpleEditYank', combine: true})
@@ -291,8 +297,12 @@ export def UnicodeTab(): string
     return ''
   endif
   var byte_col = col('.') - 1
-  var before = strpart(getline('.'), 0, byte_col)
-  var token = matchstr(before, '\m\\\%(:[^[:space:]\\]*:\|[^[:space:]\\]*\)$')
+  var start = max([0, byte_col - UNICODE_TAB_MAX_BYTES])
+  # The complete lookup key must start with an ASCII backslash inside this
+  # slice. A cut before it (even inside a preceding UTF-8 character) cannot
+  # change the candidate; a run too long for the table cannot be converted.
+  var tail = strpart(getline('.'), start, byte_col - start)
+  var token = matchstr(tail, '\m\\\%(:[^[:space:]\\]*:\|[^[:space:]\\]*\)$')
   if empty(token)
     return ''
   endif

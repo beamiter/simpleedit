@@ -51,6 +51,47 @@ for start in ['R', 'gR']
   assert_equal('\alphaXYZ', getline(1), start .. ' expansion damaged replaced text')
 endfor
 
+# Real mapping control: slicing at the oldest possible byte must not turn an
+# incomplete or long unknown token into a shorter recognized suffix.
+const HAN = nr2char(0x754c)
+const LONGER = '\:' .. repeat('z', 128) .. ':'
+const LEFT = repeat(HAN, 24) .. '中文'
+const MIXED: list<list<string>> = [
+  ['\alpha', 'α'],
+  ['\^2', '²'],
+  ['\:smile:', '😄'],
+  ['\:smile', '\:smile'],
+  ['\alphaZ', '\alphaZ'],
+  [LONGER, LONGER],
+  ['\unknown\alpha', '\unknownα'],
+  ['\alpha ', '\alpha '],
+]
+for [token, expanded] in MIXED
+  setline(1, LEFT .. token)
+  feedkeys("A\<F5>\<Esc>", 'xt')
+  assert_equal(LEFT .. expanded, getline(1), token)
+endfor
+
+# Do not read a valid continuation to the RIGHT of the cursor, or erase
+# existing text after a successful conversion.
+setline(1, '\alp' .. 'ha')
+cursor(1, 5)
+feedkeys("i\<F5>\<Esc>", 'xt')
+assert_equal('\alpha', getline(1), 'do not expand a cursor-mid-token prefix')
+setline(1, LEFT .. '\alpha#tail')
+cursor(1, strlen(LEFT .. '\alpha') + 1)
+feedkeys("i\<F5>\<Esc>", 'xt')
+assert_equal(LEFT .. 'α#tail', getline(1), 'keep right-hand text at the cursor')
+
+# Exercise every generated symbol including the exact maximum, not a hand-
+# picked length sample; a table update must keep the token bound in sync.
+for [token, replacement] in items(simpleedit#julia_symbols#Get())
+  setline(1, LEFT .. token .. '#')
+  cursor(1, strlen(LEFT .. token) + 1)
+  assert_equal(repeat("\<BS>", strlen(token)) .. replacement,
+    simpleedit#UnicodeTab(), 'generated symbol: ' .. token)
+endfor
+
 if !empty(v:errors)
   writefile(v:errors, ROOT .. '/tests/unicode_errors.log')
   cquit

@@ -1,3 +1,9 @@
 The generated Julia Unicode symbol table in autoload/simpleedit/julia_symbols.vim
 is derived from Julia's REPL completion data through JuliaEditorSupport/julia-vim.
+All 3,755 data rows match autoload/julia_latex_symbols.vim at julia-vim commit
+52b30547346b21bc93acda28d626795667f9e087, whose generator header identifies
+Julia 1.12.0-DEV.387. The longest token is 43 bytes (including the backslash).
+
+https://github.com/JuliaEditorSupport/julia-vim/blob/52b30547346b21bc93acda28d626795667f9e087/autoload/julia_latex_symbols.vim
+
 Julia and julia-vim are distributed under the MIT license.
